@@ -2,7 +2,7 @@
 
 Given a template, generate a generator.
 
-MIT/BSD/whatever type license. 
+MIT license. 
 
 --]]
 
@@ -1020,6 +1020,34 @@ end
 -- Template constructor
 --------------------------------------------------------------------------------
 
+local header = [[
+-- GENERATED CODE: DO NOT EDIT!
+local gen = ...
+-- utils:
+local format, gsub = string.format, string.gsub
+local max = math.max
+-- need this because table.concat() does not call tostring():
+local tconcat = table.concat
+local function concat(t, sep)
+	local t1 = {}
+	for i = 1, #t do t1[i] = tostring(t[i]) end
+	return tconcat(t1, sep)
+end
+-- need this because #s returns string length rather than numeric value:
+local function len(t)
+	return (type(t) == "table") and #t or tonumber(t) or 0
+end
+
+-- rules: --
+local rules = {}
+]]
+
+local footer = [[
+
+-- result:
+return rules
+]]
+
 local gen = {}
 gen.__index = gen
 
@@ -1115,11 +1143,9 @@ function gen:reify(name)
 	return rulename
 end
 
-local 
-function define_sub(self, name, t, parent)
-	if name == 1 then 
-		name = "1" 
-	end
+function gen:define(name, t, parent)
+	if name == 1 then name = "1" end
+	
 	if type(t) == "table" then
 		assert(t[1], "template table must have an entry at index 1")
 		local pre = name
@@ -1128,9 +1154,9 @@ function define_sub(self, name, t, parent)
 		end
 		for k, v in pairs(t) do
 			if k == 1 or k == "1" then
-				define_sub(self, name, v, parent)
+				self:define(name, v, parent)
 			else
-				define_sub(self, k, v, pre)
+				self:define(k, v, pre)
 			end
 		end
 	elseif type(t) == "string" then
@@ -1144,42 +1170,10 @@ function define_sub(self, name, t, parent)
 	end
 end
 
--- define a new rule in the template
-function gen:define(name, t)
-	define_sub(self, name, t)
-end
-
 -- syntactic sugar for template:define(name, code):
 -- template[name] = code 
 gen.__newindex = gen.define
 
-local header = [[
--- GENERATED CODE: DO NOT EDIT!
-local gen = ...
--- utils:
-local format, gsub = string.format, string.gsub
-local max = math.max
--- need this because table.concat() does not call tostring():
-local tconcat = table.concat
-local function concat(t, sep)
-	local t1 = {}
-	for i = 1, #t do t1[i] = tostring(t[i]) end
-	return tconcat(t1, sep)
-end
--- need this because #s returns string length rather than numeric value:
-local function len(t)
-	return (type(t) == "table") and #t or tonumber(t) or 0
-end
-
--- rules: --
-local rules = {}
-]]
-
-local footer = [[
-
--- result:
-return rules
-]]
 
 -- model is optional; if not given, it will reify but not apply
 -- rulename is optional; if not given, it will assume rule[1]
