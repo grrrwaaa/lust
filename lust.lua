@@ -540,7 +540,7 @@ function action:apply(node, out)
 	end
 end
 
-function action:loop_helper(body, out, it, start, len, terms, mt, sep)
+function action:loop_helper(body, out, it, start, len, terms, mt, sep, parent)
 	local insep
 	if sep then
 		insep = gensym("sep")
@@ -559,11 +559,20 @@ function action:loop_helper(body, out, it, start, len, terms, mt, sep)
 	if terms then
 		for i, v in ipairs(terms) do
 			-- TODO: only index if type is table!
+			print(i, v, mt)
 			out(v)
 		end
 	end
 	out:pop()
 		:format("}, %s)", mt)
+	
+	if parent then
+		out:format("for k, v in pairs(parent[%s]) do", it)
+			:push()
+			:write("env[k] = v")
+			:pop()
+			:write("end")
+	end
 	
 	local indent = self.indent
 	out:comment("loop body, indent %q", self.indent)
@@ -641,6 +650,7 @@ function action:map(node, out)
 	local sep 
 	-- loop environment terms:
 	local terms = {}
+	local fields
 	local idx = 1
 	out:comment("%s over %s", ty, env.rule)
 	
@@ -681,13 +691,13 @@ function action:map(node, out)
 			elseif v.rule == "env_array" then
 				-- these rules only return arrays:
 				terms[i] = format("[%s] = %s[%s] or '',", k, s, it)
-				out:format("%s = max(#%s, %s)", len, s, len)
+				out:format("%s = max(len(%s), %s)", len, s, len)
 			else
 				-- these rules might be strings or tables, need to index safely:
 				local b = gensym("b")
 				out:format("local %s = type(%s) == 'table'", b, s)
 				out:format("if %s then", b):push()
-				out:format("%s = max(#%s, %s)", len, s, len)
+				out:format("%s = max(len(%s), %s)", len, s, len)
 				out:pop()
 				out("end")
 				
@@ -717,10 +727,13 @@ function action:map(node, out)
 				
 				terms[#terms+1] = format("[%s] = %s,", k, s)
 			else
-				-- the array portion defines the meta-environment
+				-- the array portion is copied in element by element:
 				local s = self:dispatch(v, out)
-				mt = format("{ __index = %s[%s] }", s, it)
-				out:format("local %s = (type(%s) == 'table') and #%s or 0", len, s, s)
+				out:format("local parent = %s", s)
+					:format("local %s = (type(parent) == 'table') and len(parent) or 0", len, s, s)
+				
+				mt = "nil"
+				parent = true
 			end
 		end
 	else
@@ -734,7 +747,7 @@ function action:map(node, out)
 		start = "1"
 	end
 	
-	return action.loop_helper(self, body, out, it, start, len, terms, mt, sep)
+	return action.loop_helper(self, body, out, it, start, len, terms, mt, sep, parent)
 end
 
 function action:apply_helper(tmp, env, out)
@@ -1035,7 +1048,11 @@ local function concat(t, sep)
 end
 -- need this because #s returns string length rather than numeric value:
 local function len(t)
-	return (type(t) == "table") and #t or tonumber(t) or 0
+	if type(t) == "table" then
+		return t.n1 or #t
+	else
+		return tonumber(t) or 0
+	end
 end
 
 -- rules: --
