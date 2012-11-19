@@ -559,7 +559,6 @@ function action:loop_helper(body, out, it, start, len, terms, mt, sep, parent)
 	if terms then
 		for i, v in ipairs(terms) do
 			-- TODO: only index if type is table!
-			print(i, v, mt)
 			out(v)
 		end
 	end
@@ -650,7 +649,7 @@ function action:map(node, out)
 	local sep 
 	-- loop environment terms:
 	local terms = {}
-	local fields
+	local parent
 	local idx = 1
 	out:comment("%s over %s", ty, env.rule)
 	
@@ -730,7 +729,7 @@ function action:map(node, out)
 				-- the array portion is copied in element by element:
 				local s = self:dispatch(v, out)
 				out:format("local parent = %s", s)
-					:format("local %s = (type(parent) == 'table') and len(parent) or 0", len, s, s)
+					:format("local %s = (type(parent) == 'table') and #parent or 0", len, s, s)
 				
 				mt = "nil"
 				parent = true
@@ -859,7 +858,6 @@ function action:apply_eval_path(node, out)
 			-- by prepending segments of the current namepace:
 			local candidate = format("%s.%s", concat(ctx, ".", 1, i), pathname)
 			
-			--print("trying", candidate)
 			ok, rulename = pcall(self.reify, self, candidate)
 			if ok then
 				-- found a match, break here:
@@ -876,8 +874,10 @@ function action:apply_eval_path(node, out)
 		
 		-- if we got here, we didn't find a match:
 		-- should this really be an error, or just return a null template?
-		error(format("could not resolve template %s in context %s",
-			pathname, concat(ctx, ".")
+		for k, v in pairs(self.definitions) do print("defined", k) end
+		
+		error(format("could not resolve template %s (%s) in context %s",
+			pathname, rulename, concat(ctx, ".")
 		))
 	end
 end
@@ -1049,7 +1049,7 @@ end
 -- need this because #s returns string length rather than numeric value:
 local function len(t)
 	if type(t) == "table" then
-		return t.n1 or #t
+		return #t
 	else
 		return tonumber(t) or 0
 	end
@@ -1167,7 +1167,7 @@ function gen:define(name, t, parent)
 		assert(t[1], "template table must have an entry at index 1")
 		local pre = name
 		if parent then
-			pre = format("%s.%s.", parent, pre)
+			pre = format("%s.%s", parent, pre)
 		end
 		for k, v in pairs(t) do
 			if k == 1 or k == "1" then
@@ -1178,7 +1178,8 @@ function gen:define(name, t, parent)
 		end
 	elseif type(t) == "string" then
 		if parent then
-			self.definitions[format("%s.%s", parent, name)] = t
+			local defname = format("%s.%s", parent, name)
+			self.definitions[defname] = t
 		else
 			self.definitions[name] = t
 		end
